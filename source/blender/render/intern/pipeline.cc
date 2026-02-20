@@ -1968,6 +1968,31 @@ static void render_pipeline_free(Render *re)
   RE_display_free(re);
 }
 
+//START MANIBLEND BLOCK
+// Reimplementation of render_pipeline_free that skips freeing the engine
+static void render_pipeline_free_partially(Render *re)
+{
+  /* if (re->engine && !RE_engine_use_persistent_data(re->engine)) {
+    RE_engine_free(re->engine);
+    re->engine = nullptr;
+  } */
+
+  /* Destroy compositor that was using pipeline depsgraph. */
+  RE_compositor_free(*re);
+
+  /* Destroy pipeline depsgraph. */
+  if (re->pipeline_depsgraph != nullptr) {
+    DEG_graph_free(re->pipeline_depsgraph);
+    re->pipeline_depsgraph = nullptr;
+    re->pipeline_scene_eval = nullptr;
+  }
+
+  /* Destroy the opengl context in the correct thread. */
+  RE_blender_gpu_context_free(re);
+  RE_system_gpu_context_free(re);
+}
+//END MANIBLEND BLOCK
+
 void RE_RenderFrame(Render *re,
                     Main *bmain,
                     Scene *scene,
@@ -2130,7 +2155,8 @@ void RE_RenderFrameBuffered(Render *re,
                           &scene->id,
                           G.is_break ? BKE_CB_EVT_RENDER_CANCEL : BKE_CB_EVT_RENDER_COMPLETE);
 
-  render_pipeline_free(re);
+  // Using reduced custom function here. This might be a bad idea.
+  render_pipeline_free_partially(re);
 
   /* UGLY WARNING */
   G.is_rendering = false;
@@ -2465,7 +2491,7 @@ static bool do_save_image_buffer( Render *re,
    * Not sure it's actually even used anyway, we could as well pass nullptr? */
   render_callback_exec_string(re, G_MAIN, BKE_CB_EVT_RENDER_STATS, message.c_str());
 
-  fputc('\n', stdout);
+  // fputc('\n', stdout);
   fflush(stdout);
 
   return ok;

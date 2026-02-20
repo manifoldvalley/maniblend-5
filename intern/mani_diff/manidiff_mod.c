@@ -30,7 +30,7 @@ PyObject *clear_image_list(void){
 
 PyObject *get_maniblend_version(void){
     // Returns the current maniblend version
-    return PyUnicode_FromString("4.2.3.0");
+    return PyUnicode_FromString("4.2.3.1");
 }
 
 int createImageBufferList(){

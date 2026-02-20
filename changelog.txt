@@ -1,4 +1,4 @@
-ManiBlend Version 4.2.3.0
+ManiBlend Version 4.2.3.1
 
 ManiBlend API:
     - bpy.ops.render.render_diff(write_image: bool, buffer_image: bool)
@@ -18,6 +18,10 @@ ManiBlend API:
     - _bpy.manidiff.get_maniblend_version()
         Returns:
             str: current ManiBlend version.
+
+Version 4.2.3.1:
+    - Performance optimization
+        - Skipped step in render where rendering engine is freed. 
 
 Version 4.2.3.0:
     - Change in versioning scheme
