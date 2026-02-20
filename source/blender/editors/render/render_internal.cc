@@ -452,7 +452,7 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
 
 // BEGIN MANIBLEND BLOCK
 // This is a modified version of screen_render_exec.
-static int screen_render_exec_custom(bContext *C, wmOperator *op)
+static wmOperatorStatus screen_render_exec_custom(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   RenderEngineType *re_type = RE_engines_find(scene->r.engine);
@@ -490,12 +490,6 @@ static int screen_render_exec_custom(bContext *C, wmOperator *op)
   ima = BKE_image_ensure_viewer(mainp, IMA_TYPE_R_RESULT, "Render Result");
   BKE_image_signal(mainp, ima, nullptr, IMA_SIGNAL_FREE);
   BKE_image_backup_render(scene, ima, true);
-
-  /* cleanup sequencer caches before starting user triggered render.
-   * otherwise, invalidated cache entries can make their way into
-   * the output rendering. We can't put that into RE_RenderFrame,
-   * since sequence rendering can call that recursively... (peter) */
-  SEQ_cache_cleanup(scene);
 
   RE_SetReports(re, op->reports);
 

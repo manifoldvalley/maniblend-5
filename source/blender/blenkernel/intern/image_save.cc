@@ -1345,7 +1345,7 @@ bool BKE_image_render_buffer(ReportList *reports,
         bool skip_save = false;
         if (!ibuf->float_buffer.data){
           printf("Render imbuf does not have float rect, creting one.");
-          IMB_float_from_rect(ibuf);
+          IMB_float_from_byte(ibuf);
           if (!ibuf->float_buffer.data){
             printf("Creation of imbuf float rect failed.");
             skip_save = true;

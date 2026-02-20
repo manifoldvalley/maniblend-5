@@ -1988,8 +1988,7 @@ static void render_pipeline_free_partially(Render *re)
   }
 
   /* Destroy the opengl context in the correct thread. */
-  RE_blender_gpu_context_free(re);
-  RE_system_gpu_context_free(re);
+  RE_display_free(re);
 }
 //END MANIBLEND BLOCK
 
@@ -2127,6 +2126,7 @@ void RE_RenderFrameBuffered(Render *re,
         BKE_image_path_from_imformat(filepath_override,
                                      rd.pic,
                                      BKE_main_blendfile_path(bmain),
+                                     nullptr,
                                      scene->r.cfra,
                                      &rd.im_format,
                                      (rd.scemode & R_EXTENSION) != 0,
@@ -2135,7 +2135,7 @@ void RE_RenderFrameBuffered(Render *re,
 
         /* reports only used for Movie */
         if (write_image) {
-          do_write_image_or_movie(re, bmain, scene, nullptr, 0, filepath_override);
+          do_write_image_or_movie(re, bmain, scene, 0, filepath_override);
         }
         if (buffer_image) {
           do_save_image_buffer(re, bmain, scene, filepath_override);
@@ -2453,6 +2453,7 @@ static bool do_save_image_buffer( Render *re,
         BKE_image_path_from_imformat(filepath,
                                      scene->r.pic,
                                      BKE_main_blendfile_path(bmain),
+                                     nullptr,
                                      scene->r.cfra,
                                      &scene->r.im_format,
                                      (scene->r.scemode & R_EXTENSION) != 0,
