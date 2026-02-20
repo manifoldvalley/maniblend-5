@@ -44,6 +44,8 @@
 
 #include "CLG_log.h"
 
+#include "render_diff.h"
+
 static CLG_LogRef LOG_RENDER = {"render"};
 
 using blender::Vector;
@@ -1260,3 +1262,167 @@ bool BKE_image_render_write(ReportList *reports,
 
   return ok;
 }
+
+// BEGIN MANIBLEND BLOCK
+bool BKE_image_render_buffer(ReportList *reports,
+                            RenderResult *rr,
+                            const Scene *scene,
+                            const bool stamp,
+                            const char *filepath_basis,
+                            const ImageFormatData *format,
+                            bool save_as_render)
+{
+  bool ok = true;
+
+  if (!rr) {
+    return false;
+  }
+
+  ImageFormatData image_format;
+  BKE_image_format_init_for_write(&image_format, scene, format);
+
+  const bool is_mono = BLI_listbase_count_at_most(&rr->views, 2) < 2;
+  const bool is_exr_rr = ELEM(
+                             image_format.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER) &&
+                         RE_HasFloatPixels(rr);
+  const float dither = scene->r.dither_intensity;
+
+  if (image_format.views_format == R_IMF_VIEWS_MULTIVIEW && is_exr_rr) {
+    /* ok = BKE_image_render_write_exr(
+        reports, rr, filepath_basis, &image_format, save_as_render, nullptr, -1);
+    image_render_print_save_message(reports, filepath_basis, ok, errno); */
+    // ^ this is the original code, but we don't want to support exr here
+    printf("OpenEXR not supported by BKE_image_render_buffer\n");
+    ok = false;
+  }
+
+  /* mono, legacy code */
+  else if (is_mono || (image_format.views_format == R_IMF_VIEWS_INDIVIDUAL)) {
+    int view_id = 0;
+    for (const RenderView *rv = (const RenderView *)rr->views.first; rv; rv = rv->next, view_id++)
+    {
+      char filepath[FILE_MAX];
+      if (is_mono) {
+        STRNCPY(filepath, filepath_basis);
+      }
+      else {
+        BKE_scene_multiview_view_filepath_get(&scene->r, filepath_basis, rv->name, filepath);
+      }
+
+      if (is_exr_rr) {
+        /* ok = BKE_image_render_write_exr(
+            reports, rr, filepath, &image_format, save_as_render, rv->name, -1);
+        image_render_print_save_message(reports, filepath, ok, errno); */
+
+        /* optional preview images for exr */
+        /* if (ok && (image_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
+          image_format.imtype = R_IMF_IMTYPE_JPEG90;
+          image_format.depth = R_IMF_CHAN_DEPTH_8;
+
+          if (BLI_path_extension_check(filepath, ".exr")) {
+            filepath[strlen(filepath) - 4] = 0;
+          }
+          BKE_image_path_ext_from_imformat_ensure(filepath, sizeof(filepath), &image_format);
+
+          ImBuf *ibuf = RE_render_result_rect_to_ibuf(rr, &image_format, dither, view_id);
+          ibuf->planes = 24;
+          IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &image_format);
+
+          ok = image_render_write_stamp_test(
+              reports, scene, rr, ibuf, filepath, &image_format, stamp);
+
+          IMB_freeImBuf(ibuf);
+        } */
+        printf ("OpenEXR not supported by BKE_image_render_buffer\n");
+      }
+      else {
+        ImBuf *ibuf = RE_render_result_rect_to_ibuf(rr, &image_format, dither, view_id);
+
+        IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &image_format);
+
+        // Start Custom code
+        // We need to unpremultiply the alpha channel before storing
+        bool skip_save = false;
+        if (!ibuf->float_buffer.data){
+          printf("Render imbuf does not have float rect, creting one.");
+          IMB_float_from_rect(ibuf);
+          if (!ibuf->float_buffer.data){
+            printf("Creation of imbuf float rect failed.");
+            skip_save = true;
+          }
+        }
+        if (!skip_save){
+          if (!imageBufferListIsNull()){
+            printf("Image buffer list was not cleared since previous render\n.");
+            exit(-1);
+          }
+          IMB_unpremultiply_alpha(ibuf);
+          if (saveImageToBuffer(ibuf->float_buffer.data, ibuf->x, ibuf->y)){
+            printf("Saving imbuf to buffer failed.");
+          }
+        }
+          
+
+        // End custom code
+
+        /* imbuf knows which rects are not part of ibuf */
+        IMB_freeImBuf(ibuf);
+      }
+    }
+  }
+  else { /* R_IMF_VIEWS_STEREO_3D */
+    /* BLI_assert(image_format.views_format == R_IMF_VIEWS_STEREO_3D);
+
+    char filepath[FILE_MAX];
+    STRNCPY(filepath, filepath_basis);
+
+    if (image_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
+      printf("Stereo 3D not supported for MultiLayer image: %s\n", filepath);
+    }
+    else {
+      ImBuf *ibuf_arr[3] = {nullptr};
+      const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+      int i;
+
+      for (i = 0; i < 2; i++) {
+        int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
+        ibuf_arr[i] = RE_render_result_rect_to_ibuf(rr, &image_format, dither, view_id);
+        IMB_colormanagement_imbuf_for_write(ibuf_arr[i], save_as_render, false, &image_format);
+      }
+
+      ibuf_arr[2] = IMB_stereo3d_ImBuf(&image_format, ibuf_arr[0], ibuf_arr[1]);
+
+      ok = image_render_write_stamp_test(
+          reports, scene, rr, ibuf_arr[2], filepath, &image_format, stamp); */
+
+      /* optional preview images for exr */
+      /* if (ok && is_exr_rr && (image_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
+        image_format.imtype = R_IMF_IMTYPE_JPEG90;
+        image_format.depth = R_IMF_CHAN_DEPTH_8;
+
+        if (BLI_path_extension_check(filepath, ".exr")) {
+          filepath[strlen(filepath) - 4] = 0;
+        }
+
+        BKE_image_path_ext_from_imformat_ensure(filepath, sizeof(filepath), &image_format);
+        ibuf_arr[2]->planes = 24;
+
+        ok = image_render_write_stamp_test(
+            reports, scene, rr, ibuf_arr[2], filepath, &image_format, stamp);
+      } */
+
+      /* imbuf knows which rects are not part of ibuf */
+      /* for (i = 0; i < 3; i++) {
+        IMB_freeImBuf(ibuf_arr[i]);
+      } 
+    }*/
+    // ^ this is the original code, but we don't want to support stereo 3d here
+    printf("Stereo 3D not supported by BKE_image_render_buffer\n");
+    ok = false;
+  }
+
+  BKE_image_format_free(&image_format);
+
+  return ok;
+}
+// END MANIBLEND BLOCK

@@ -1,0 +1,45 @@
+ManiBlend Version 4.2.3.0
+
+ManiBlend API:
+    - bpy.ops.render.render_diff(write_image: bool, buffer_image: bool)
+        Renders current animation.
+        Args:
+            write_image (bool): If True, save image to filesystem according to bpy.context.scene.render.filepath.
+            buffer_image (bool): If True, add image to python list at _bpy.manidiff.get_image_list() as a bytes object. 
+    - _bpy.manidiff.get_image_list()
+        Get current image buffer list.
+        Returns:
+            list[bytes]: Current image buffer list. 
+                            Image is stored as unpremultiplied RGBA float array.
+                            Image pixel rows stored from bottom to top, must be flipped prior to use.
+    - _bpy.manidiff.clear_image_list()
+        Clear current image buffer list.
+        This action must be performed before rendering with render_diff.
+    - _bpy.manidiff.get_maniblend_version()
+        Returns:
+            str: current ManiBlend version.
+
+Version 4.2.3.0:
+    - Change in versioning scheme
+        - First three sections now match the underlying blender version
+        - Fourth section incremented by any maniblend patch
+    - Built on Blender 4.2.3
+    - Requires Python 3.11
+
+Version 2.3.0:
+    - Built on Blender 3.6.9
+
+Version 2.2.0:
+    - Built on Blender 3.6.5
+
+Version 2.1.0:
+    - Built on Blender 3.6
+
+Version 2.0.0:
+    - Built on Blender 3.5
+    - Requires Python 3.10
+
+Version 1.0.0:
+    - Start of ManiBlend versioning
+    - Built on Blender 3.0.1
+    - Requires Python 3.9

@@ -370,6 +370,17 @@ void RE_RenderFrame(struct Render *re,
                     int frame,
                     float subframe,
                     bool write_still);
+// START MANIBLEND BLOCK
+void RE_RenderFrameBuffered(struct Render *re,
+                            struct Main *bmain,
+                            struct Scene *scene,
+                            struct ViewLayer *single_layer,
+                            struct Object *camera_override,
+                            int frame,
+                            float subframe,
+                            bool write_image,
+                            bool buffer_image);
+// END MANIBLEND BLOCK
 /**
  * A version of #RE_RenderFrame that saves images to disk.
  */

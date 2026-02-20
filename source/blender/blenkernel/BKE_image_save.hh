@@ -80,3 +80,12 @@ bool BKE_image_render_write(ReportList *reports,
                             const char *filepath_basis,
                             const ImageFormatData *format = nullptr,
                             bool save_as_render = true);
+// BEGIN MANIBLEND BLOCK
+bool BKE_image_render_buffer(ReportList *reports,
+                            RenderResult *rr,
+                            const Scene *scene,
+                            const bool stamp,
+                            const char *filepath_basis,
+                            const ImageFormatData *format = nullptr,
+                            bool save_as_render = true);
+// END MANIBLEND BLOCK

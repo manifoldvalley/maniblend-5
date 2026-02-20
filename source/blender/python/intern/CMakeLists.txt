@@ -8,6 +8,7 @@ set(INC
   ../../imbuf/intern/oiio
   ../../makesrna
   ../../../../intern/mantaflow/extern
+  ../../../../intern/mani_diff
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -137,6 +138,7 @@ set(LIB
   ${PYTHON_LINKFLAGS}
   ${PYTHON_LIBRARIES}
   PRIVATE bf::windowmanager
+  intern_mani_diff
 )
 
 # Only to check if `buildinfo` is available.

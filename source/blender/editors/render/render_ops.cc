@@ -77,6 +77,9 @@ void ED_operatortypes_render()
   /* `render_internal.cc` */
   WM_operatortype_append(RENDER_OT_view_show);
   WM_operatortype_append(RENDER_OT_render);
+  // BEGIN MANIBLEND BLOCK
+  WM_operatortype_append(RENDER_OT_diff);
+  // END MANIBLEND BLOCK
   WM_operatortype_append(RENDER_OT_view_cancel);
   WM_operatortype_append(RENDER_OT_shutter_curve_preset);
 

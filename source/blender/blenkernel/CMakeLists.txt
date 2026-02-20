@@ -20,6 +20,8 @@ set(INC
   ../../../intern/mikktspace
   ../../../intern/opensubdiv
 
+  ../../../intern/mani_diff
+
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -596,6 +598,8 @@ set(LIB
   PRIVATE bf::extern::fmtlib
   PRIVATE bf::extern::xxhash
   PRIVATE bf::intern::atomic
+
+  intern_mani_diff
   # For `vfontdata_freetype.c`.
   ${FREETYPE_LIBRARIES} ${BROTLI_LIBRARIES}
 )

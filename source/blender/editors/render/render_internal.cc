@@ -67,6 +67,8 @@
 
 #include "render_intern.hh"
 
+#include "render_diff.h"
+
 /* Render Callbacks */
 static bool render_break(void *rjv);
 
@@ -447,6 +449,104 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   }
   return OPERATOR_FINISHED;
 }
+
+// BEGIN MANIBLEND BLOCK
+// This is a modified version of screen_render_exec.
+static int screen_render_exec_custom(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_scene(C);
+  RenderEngineType *re_type = RE_engines_find(scene->r.engine);
+  ViewLayer *active_layer = CTX_data_view_layer(C);
+  ViewLayer *single_layer = nullptr;
+  Render *re;
+  Image *ima;
+  View3D *v3d = CTX_wm_view3d(C);
+  Main *mainp = CTX_data_main(C);
+  const bool write_image = RNA_boolean_get(op->ptr, "write_image");
+  const bool buffer_image = RNA_boolean_get(op->ptr, "buffer_image");
+  Object *camera_override = v3d ? V3D_CAMERA_LOCAL(v3d) : nullptr;
+
+  /* Cannot do render if there is not this function. */
+  if (re_type->render == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* custom scene and single layer re-render */
+  screen_render_single_layer_set(op, mainp, active_layer, &scene, &single_layer);
+
+  /* if (!is_animation && is_write_still && BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+    BKE_report(
+        op->reports, RPT_ERROR, "Cannot write a single file with an animation format selected");
+    return OPERATOR_CANCELLED;
+  } */
+
+  re = RE_NewSceneRender(scene);
+
+  G.is_break = false;
+
+  RE_draw_lock_cb(re, nullptr, nullptr);
+  RE_test_break_cb(re, nullptr, render_break);
+
+  ima = BKE_image_ensure_viewer(mainp, IMA_TYPE_R_RESULT, "Render Result");
+  BKE_image_signal(mainp, ima, nullptr, IMA_SIGNAL_FREE);
+  BKE_image_backup_render(scene, ima, true);
+
+  /* cleanup sequencer caches before starting user triggered render.
+   * otherwise, invalidated cache entries can make their way into
+   * the output rendering. We can't put that into RE_RenderFrame,
+   * since sequence rendering can call that recursively... (peter) */
+  SEQ_cache_cleanup(scene);
+
+  RE_SetReports(re, op->reports);
+
+  /* if (is_animation) {
+    RE_RenderAnim(re,
+                  mainp,
+                  scene,
+                  single_layer,
+                  camera_override,
+                  scene->r.sfra,
+                  scene->r.efra,
+                  scene->r.frame_step);
+  }
+  else { */
+    RE_RenderFrameBuffered(re,
+                           mainp,
+                           scene,
+                           single_layer,
+                           camera_override,
+                           scene->r.cfra,
+                           scene->r.subframe,
+                           write_image,
+                           buffer_image);
+  /* } */
+
+  RE_SetReports(re, nullptr);
+
+  const bool cancelled = G.is_break;
+
+  if (cancelled) {
+    RenderResult *rr = RE_AcquireResultRead(re);
+    if (rr && rr->error) {
+      /* NOTE(@ideasman42): Report, otherwise the error is entirely hidden from script authors.
+       * This is only done for the #wmOperatorType::exec function because it's assumed users
+       * rendering interactively will view the render and see the error message there. */
+      BKE_report(op->reports, RPT_ERROR, rr->error);
+    }
+    RE_ReleaseResult(re);
+  }
+
+  /* No redraw needed, we leave state as we entered it. */
+  ED_update_for_newframe(mainp, CTX_data_depsgraph_pointer(C));
+
+  WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
+
+  if (cancelled) {
+    return OPERATOR_CANCELLED;
+  }
+  return OPERATOR_FINISHED;
+}
+// END MANIBLEND BLOCK
 
 static void render_freejob(void *rjv)
 {
@@ -1349,6 +1449,43 @@ static RenderJobBase *render_job_get(const bContext *C)
 
   return rj;
 }
+
+// START MANIBLEND BLOCK
+// This is a copy of RENDER_OT_diff
+/* contextual render, using current scene, view3d? */
+void RENDER_OT_diff(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Difference";
+  ot->description = "Render active as an animation";
+  ot->idname = "RENDER_OT_diff";
+
+  /* api callbacks */
+  ot->invoke = NULL;
+  ot->modal = NULL;
+  ot->cancel = NULL;
+  ot->exec = screen_render_exec_custom;
+
+  /* This isn't needed, causes failure in background mode. */
+#if 0
+  ot->poll = ED_operator_screenactive;
+#endif
+  prop = RNA_def_boolean(ot->srna,
+                         "write_image",
+                         0,
+                         "Write Image",
+                         "Write render result image to disk.");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "buffer_image",
+                         0,
+                         "Buffer Image",
+                         "Save render result image to memory buffer.");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+// END MANIBLEND BLOCK
 
 Scene *ED_render_job_get_scene(const bContext *C)
 {

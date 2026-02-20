@@ -84,6 +84,9 @@ struct RenderJobBase {
  * Contextual render, using current scene, view3d?
  */
 void RENDER_OT_render(wmOperatorType *ot);
+// BEGIN MANIBLEND BLOCK
+void RENDER_OT_diff(wmOperatorType *ot);
+// END MANIBLEND BLOCK
 void RENDER_OT_shutter_curve_preset(wmOperatorType *ot);
 
 /* `render_view.cc` */
