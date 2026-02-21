@@ -5,6 +5,7 @@
 set(INC
   ../include
   ../../makesrna
+  ../../../../intern/mani_diff
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -43,6 +44,7 @@ set(LIB
   PRIVATE bf::render
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
+  intern_mani_diff
 )
 
 if(WITH_HEADLESS)

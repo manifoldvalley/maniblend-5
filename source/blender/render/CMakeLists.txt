@@ -15,6 +15,7 @@ set(INC
   ../simulation
   ../../../intern/mikktspace
   ../../../intern/mantaflow/extern
+  ../../../intern/mani_diff
 )
 
 set(INC_SYS
@@ -69,6 +70,7 @@ set(LIB
   PRIVATE bf::nodes
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
+  intern_mani_diff
 )
 
 if(WITH_PYTHON)

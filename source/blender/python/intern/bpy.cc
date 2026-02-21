@@ -52,6 +52,8 @@
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 #include "../generic/python_utildefines.hh"
 
+#include "manidiff_mod.h"
+
 /* external util modules */
 #include "../generic/idprop_py_api.hh"
 #include "../generic/idprop_py_ui_api.hh"
@@ -782,6 +784,9 @@ void BPy_init_modules(bContext *C)
   PyModule_AddObject(mod, "_utils_units", BPY_utils_units());
   PyModule_AddObject(mod, "_utils_previews", BPY_utils_previews_module());
   PyModule_AddObject(mod, "msgbus", BPY_msgbus_module());
+  // BEGIN MANIBLEND BLOCK
+  PyModule_AddObject(mod, "manidiff", MD_manidiff_module());
+  // END MANIBLEND BLOCK
 
   PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, C);
   bpy_context_module = (BPy_StructRNA *)pyrna_struct_CreatePyObject(&ctx_ptr);

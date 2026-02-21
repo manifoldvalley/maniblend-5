@@ -90,6 +90,8 @@
 #include "WM_api.hh"
 #include "wm_window.hh"
 
+#include "render_diff.h"
+
 #ifdef WITH_FREESTYLE
 #  include "FRS_freestyle.h"
 #endif
@@ -176,6 +178,15 @@ static void render_callback_exec_id(Render *re, Main *bmain, ID *id, eCbEvent ev
 
 static bool do_write_image_or_movie(
     Render *re, Main *bmain, Scene *scene, const int totvideos, const char *filepath_override);
+
+// START MANIBLEND BLOCK
+static bool do_save_image_buffer(Render *re,
+                                 Main *bmain,
+                                 Scene *scene,
+                                 // bMovieHandle *mh,
+                                 // const int totvideos,
+                                 const char *filepath_override);
+// END MANIBLEND BLOCK
 
 /* default callbacks, set in each new render */
 static void result_rcti_nothing(void * /*arg*/, RenderResult * /*rr*/, rcti * /*rect*/) {}
@@ -1957,6 +1968,30 @@ static void render_pipeline_free(Render *re)
   RE_display_free(re);
 }
 
+//START MANIBLEND BLOCK
+// Reimplementation of render_pipeline_free that skips freeing the engine
+static void render_pipeline_free_partially(Render *re)
+{
+  /* if (re->engine && !RE_engine_use_persistent_data(re->engine)) {
+    RE_engine_free(re->engine);
+    re->engine = nullptr;
+  } */
+
+  /* Destroy compositor that was using pipeline depsgraph. */
+  RE_compositor_free(*re);
+
+  /* Destroy pipeline depsgraph. */
+  if (re->pipeline_depsgraph != nullptr) {
+    DEG_graph_free(re->pipeline_depsgraph);
+    re->pipeline_depsgraph = nullptr;
+    re->pipeline_scene_eval = nullptr;
+  }
+
+  /* Destroy the opengl context in the correct thread. */
+  RE_display_free(re);
+}
+//END MANIBLEND BLOCK
+
 void RE_RenderFrame(Render *re,
                     Main *bmain,
                     Scene *scene,
@@ -2039,6 +2074,89 @@ void RE_RenderFrame(Render *re,
                           G.is_break ? BKE_CB_EVT_RENDER_CANCEL : BKE_CB_EVT_RENDER_COMPLETE);
 
   render_pipeline_free(re);
+
+  /* UGLY WARNING */
+  G.is_rendering = false;
+}
+
+// BEGIN MANIBLEND BLOCK
+void RE_RenderFrameBuffered(Render *re,
+                            Main *bmain,
+                            Scene *scene,
+                            ViewLayer *single_layer,
+                            Object *camera_override,
+                            const int frame,
+                            const float subframe,
+                            const bool write_image,
+                            const bool buffer_image)
+{
+  render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_INIT);
+
+  /* Ugly global still...
+   * is to prevent preview events and signal subdivision-surface etc to make full resolution. */
+  G.is_rendering = true;
+
+  scene->r.cfra = frame;
+  scene->r.subframe = subframe;
+
+  if (render_init_from_main(
+          re, &scene->r, bmain, scene, single_layer, camera_override, false, false))
+  {
+    RenderData rd;
+    memcpy(&rd, &scene->r, sizeof(rd));
+    MEM_reset_peak_memory();
+
+    render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_PRE);
+
+    /* Reduce GPU memory usage so renderer has more space. */
+    RE_FreeGPUTextureCaches();
+
+    render_init_depsgraph(re);
+
+    do_render_full_pipeline(re);
+
+    const bool should_write = true;
+    if (should_write && !G.is_break) {
+      if (BKE_imtype_is_movie(rd.im_format.imtype)) {
+        /* operator checks this but in case its called from elsewhere */
+        printf("Error: can't write single images with a movie format!\n");
+      }
+      else {
+        char filepath_override[FILE_MAX];
+        BKE_image_path_from_imformat(filepath_override,
+                                     rd.pic,
+                                     BKE_main_blendfile_path(bmain),
+                                     nullptr,
+                                     scene->r.cfra,
+                                     &rd.im_format,
+                                     (rd.scemode & R_EXTENSION) != 0,
+                                     false,
+                                     nullptr);
+
+        /* reports only used for Movie */
+        if (write_image) {
+          do_write_image_or_movie(re, bmain, scene, 0, filepath_override);
+        }
+        if (buffer_image) {
+          do_save_image_buffer(re, bmain, scene, filepath_override);
+        }
+      }
+    }
+
+    /* keep after file save */
+    render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_POST);
+    if (should_write) {
+      render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_WRITE);
+    }
+  }
+
+  render_callback_exec_id(re,
+                          re->main,
+                          &scene->id,
+                          G.is_break ? BKE_CB_EVT_RENDER_CANCEL : BKE_CB_EVT_RENDER_COMPLETE);
+
+  // Using reduced custom function here. This might be a bad idea.
+  render_pipeline_free_partially(re);
 
   /* UGLY WARNING */
   G.is_rendering = false;
@@ -2296,6 +2414,90 @@ static bool do_write_image_or_movie(
 
   return ok;
 }
+
+// BEGIN MANIBLEND BLOCK
+/* Copy of do_write_image_or_movie() that buffers the result. */
+static bool do_save_image_buffer( Render *re,
+                                  Main *bmain,
+                                  Scene *scene,
+                                  // bMovieHandle *mh,
+                                  // const int totvideos,
+                                  const char *filepath_override)
+{
+  char filepath[FILE_MAX];
+  RenderResult rres;
+  double render_time;
+  bool ok = true;
+  RenderEngineType *re_type = RE_engines_find(re->r.engine);
+
+  /* Only disable file writing if postprocessing is also disabled. */
+  const bool do_write_file = !(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
+                             (re_type->flag & RE_USE_POSTPROCESS);
+
+  if (do_write_file) {
+    RE_AcquireResultImageViews(re, &rres);
+
+    /* write movie or image */
+    if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+      /* RE_WriteRenderViewsMovie(
+          re->reports, &rres, scene, &re->r, mh, re->movie_ctx_arr, totvideos, false); 
+          ^ We dont support movies in this mode.*/
+      printf("Error: Movies are not supported in this mode.\n");
+      return false;
+    }
+    else {
+      if (filepath_override) {
+        STRNCPY(filepath, filepath_override);
+      }
+      else {
+        BKE_image_path_from_imformat(filepath,
+                                     scene->r.pic,
+                                     BKE_main_blendfile_path(bmain),
+                                     nullptr,
+                                     scene->r.cfra,
+                                     &scene->r.im_format,
+                                     (scene->r.scemode & R_EXTENSION) != 0,
+                                     true,
+                                     nullptr);
+      }
+
+      /* write images as individual images or stereo */
+      /* ok = BKE_image_render_write(re->reports, &rres, scene, true, filepath); 
+      ^ Do not write the image here, substitute my alternate buffer function.*/
+      BKE_image_render_buffer(re->reports, &rres, scene, true, filepath);
+    }
+
+    RE_ReleaseResultImageViews(re, &rres);
+  }
+  else{
+    printf("do_write_file is false, is this possible?\n");
+  }
+
+  render_time = re->i.lastframetime;
+  re->i.lastframetime = BLI_time_now_seconds() - re->i.starttime;
+
+  BLI_timecode_string_from_time_simple(filepath, sizeof(filepath), re->i.lastframetime);
+  std::string message = fmt::format("Time: {}", filepath);
+
+  if (do_write_file) {
+    BLI_timecode_string_from_time_simple(
+        filepath, sizeof(filepath), re->i.lastframetime - render_time);
+    message = fmt::format("{} (Saving: {})", message, filepath);
+  }
+  /* printf("%s\n", message.c_str()); */
+  /* Flush stdout to be sure python callbacks are printing stuff after blender. */
+  /* fflush(stdout); */
+
+  /* NOTE: using G_MAIN seems valid here???
+   * Not sure it's actually even used anyway, we could as well pass nullptr? */
+  render_callback_exec_string(re, G_MAIN, BKE_CB_EVT_RENDER_STATS, message.c_str());
+
+  // fputc('\n', stdout);
+  fflush(stdout);
+
+  return ok;
+}
+// END MANIBLEND BLOCK
 
 static void get_videos_dimensions(const Render *re,
                                   const RenderData *rd,

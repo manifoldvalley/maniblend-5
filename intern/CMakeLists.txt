@@ -13,6 +13,7 @@ add_subdirectory(opensubdiv)
 add_subdirectory(mikktspace)
 add_subdirectory(eigen)
 add_subdirectory(sky)
+add_subdirectory(mani_diff)
 
 add_subdirectory(openvdb)
 
